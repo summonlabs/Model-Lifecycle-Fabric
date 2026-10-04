@@ -51,7 +51,7 @@ authority binding; durable structural state; conservative recovery; distributed
 coordinator and worker authority; deterministic explanations; immutable snapshots;
 and REAL / SYNTHETIC / UNSUPPORTED provenance for hardware and runtime validation.
 
-It **does not own**, and does not absorb: model artifact storage; Model Cache;
+It **does not own**, and does not absorb: model artifact storage; [Model Cache](https://github.com/pngen/Model-Cache);
 generic Model Residency policy; inference routing; Model Router decisions; request
 scheduling; replica execution; inference serving; training; checkpoint creation;
 adapter composition semantics; runtime package installation; compiler execution;
