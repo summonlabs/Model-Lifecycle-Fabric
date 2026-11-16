@@ -451,8 +451,15 @@ ProtocolStatus Socket::listen_on(std::string_view address, std::uint16_t port, i
   listening.handle_ = static_cast<std::uintptr_t>(handle);
 
   int reuse = 1;
+#ifdef _WIN32
+  // SO_REUSEADDR on Windows lets a second socket bind a port that is still
+  // listening; exclusive use makes that second bind fail instead.
+  static_cast<void>(setsockopt(handle, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                               reinterpret_cast<const char*>(&reuse), sizeof(reuse)));
+#else
   static_cast<void>(setsockopt(handle, SOL_SOCKET, SO_REUSEADDR,
                                reinterpret_cast<const char*>(&reuse), sizeof(reuse)));
+#endif
 
   sockaddr_in local{};
   local.sin_family = AF_INET;

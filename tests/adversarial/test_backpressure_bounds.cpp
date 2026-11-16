@@ -1,4 +1,9 @@
 // Backpressure: bounded queues reject explicitly and account the loss.
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "mlf/client.hpp"
 #include "mlf/coordinator.hpp"
 #include "mlf/engine.hpp"
 
@@ -147,4 +152,43 @@ MLF_TEST(backpressure, the_engine_reports_evidence_gaps_in_its_statistics) {
   const StoreStats stats = scenario.engine->stats();
   MLF_CHECK(stats.evidence_dropped > 0);
   MLF_CHECK(stats.evidence <= 4);
+}
+
+MLF_TEST(backpressure, a_second_coordinator_cannot_take_a_listening_port) {
+  mlftest::InProcessCoordinator first;
+  std::string error;
+  MLF_CHECK_MSG(first.start(error), error);
+  // Two coordinators must never share one listening port: the second start fails.
+  CoordinatorConfig config;
+  config.bind_address = "127.0.0.1";
+  config.port = first.port();
+  LifecycleCoordinator second(config);
+  std::string second_error;
+  const bool started = second.start(second_error);
+  MLF_CHECK(!started);
+  if (started) second.stop();
+  first.stop();
+}
+
+MLF_TEST(backpressure, every_admitted_connection_is_served) {
+  mlftest::InProcessCoordinator coordinator;
+  std::string error;
+  MLF_CHECK_MSG(coordinator.start(error), error);
+  // Fill the connection limit, then require an answer on every connection,
+  // including the last one admitted.
+  const std::size_t limit = CoordinatorConfig{}.limits.max_connections;
+  std::vector<std::unique_ptr<LifecycleClient>> clients;
+  for (std::size_t i = 0; i < limit; ++i) {
+    auto client = std::make_unique<LifecycleClient>();
+    MLF_CHECK_MSG(client->connect("127.0.0.1", coordinator.port(), error), error);
+    clients.push_back(std::move(client));
+  }
+  std::size_t answered = 0;
+  for (auto& client : clients) {
+    const Reply hello = client->hello(WorkerId{}, WorkerBootId{}, CoordinatorEpoch{}, {}, error);
+    if (hello.ok()) ++answered;
+  }
+  MLF_CHECK(answered == limit);
+  for (auto& client : clients) client->close();
+  coordinator.stop();
 }

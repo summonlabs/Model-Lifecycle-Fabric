@@ -1,3 +1,13 @@
+// The poll loop watches the listener and every session in one select() set. A
+// Windows fd_set holds FD_SETSIZE sockets (64 by default) and FD_SET silently
+// ignores the rest, so with the default 64-connection limit the last admitted
+// session was never read. The set is sized here, before any Winsock header.
+#ifdef _WIN32
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 1024
+#endif
+#endif
+
 #include "mlf/coordinator.hpp"
 
 #include <algorithm>
@@ -54,6 +64,14 @@ LifecycleCoordinator::~LifecycleCoordinator() { stop(); }
 
 bool LifecycleCoordinator::start(std::string& error) {
   if (running_) return true;
+#ifdef _WIN32
+  // The listener and every admitted session must fit in one select() set.
+  if (config_.limits.max_connections >= static_cast<std::size_t>(FD_SETSIZE)) {
+    error = "max_connections must be below " + std::to_string(FD_SETSIZE) +
+            ", the number of sockets the poll loop can watch";
+    return false;
+  }
+#endif
 
   // --- recovery -----------------------------------------------------------
   if (!config_.state_path.empty()) {
